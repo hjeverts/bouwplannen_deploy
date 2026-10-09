@@ -6,13 +6,15 @@ Draait de [frontend](https://github.com/hjeverts/bouwplannen_frontend) en de [AP
 
 ```
 bouwplannen/
-├── bouwplannen_deploy/     ← deze repo; hier draai je ./update.sh (en host-nginx/install.sh)
+├── bouwplannen_deploy/     ← deze repo; hier draai je ./update.sh, ./user.sh (en host-nginx/install.sh)
 ├── bouwplannen_frontend/   ← opgehaald en bijgehouden door update.sh
 ├── bouwplannen_backend/    ← idem
-└── data/projects/*.json    ← de projecten
+└── data/
+    ├── accounts.json       ← gebruikers en groepen (wachtwoorden gehasht)
+    └── projects/*.json     ← de projecten
 ```
 
-Alles draait onder één adres: nginx serveert de app en stuurt `/api/` door naar de API. Geen CORS, één certificaat. In de app vul je bij **Synchroniseren** dat adres in (staat al voorgevuld) en de API-sleutel.
+Alles draait onder één adres: nginx serveert de app en stuurt `/api/` door naar de API. Geen CORS, één certificaat, en de login-cookie blijft binnen je domein.
 
 ## Installeren
 
@@ -22,14 +24,26 @@ Nodig: Docker met Compose v2, git, en leesrecht op de drie repo's vanaf de serve
 mkdir -p ~/bouwplannen && cd ~/bouwplannen
 git clone git@github.com:hjeverts/bouwplannen_deploy.git
 cd bouwplannen_deploy
-cp .env.example .env
-sed -i "s/^BOUWPLANNEN_API_KEY=.*/BOUWPLANNEN_API_KEY=$(openssl rand -hex 24)/" .env
-./update.sh
+./update.sh                          # maakt .env, haalt de code op, bouwt en start
+./user.sh add hans --name "Hans Everts"   # eerste account = beheerder; vraagt een wachtwoord
 ```
 
-De eerste run clonet de frontend en backend naast deze map, maakt `../data` aan, bouwt de images en start alles. Daarna staat de app op `http://127.0.0.1:8380`. Die poort pas je aan met `WEB_PORT` in `.env` (niet in `docker-compose.yml`: dat bestand komt uit git en `update.sh` werkt het bij). Is de poort al bezet, dan stopt `update.sh` met een duidelijke melding.
+De eerste run maakt `.env` aan uit `.env.example`, clonet de frontend en backend naast deze map, maakt `../data` aan, bouwt de images en start alles. Daarna staat de app op `http://127.0.0.1:8380`. Die poort pas je aan met `WEB_PORT` in `.env` (niet in `docker-compose.yml`: dat bestand komt uit git en `update.sh` werkt het bij). Is de poort al bezet, dan stopt `update.sh` met een duidelijke melding.
 
-De API-sleutel voor de app vind je terug met `grep BOUWPLANNEN_API_KEY .env`.
+## Accounts
+
+Er is geen registratie op de site: accounts maak je op de server.
+
+```bash
+./user.sh add piet                    # account met eigen privégroep (vraagt wachtwoord, min. 10 tekens)
+./user.sh add marieke --admin         # ook beheerder van de server
+./user.sh list                        # accounts, rol, status en groepen
+./user.sh passwd piet                 # nieuw wachtwoord (logt piet overal uit)
+./user.sh disable piet                # blokkeren en overal uitloggen; enable zet het terug
+./user.sh logout piet                 # alleen overal uitloggen
+```
+
+Groepen beheer je in de app zelf: iedereen kan een groep maken, leden toevoegen op gebruikersnaam en die delen dan de projecten in die groep. `user.sh` draait in de API-container (`docker compose run`), dus .NET hoeft niet op de server; wijzigingen werken direct.
 
 ## Bijwerken
 
@@ -57,7 +71,7 @@ Er draait altijd maar één `update.sh` tegelijk (lock), dus automatisch draaien
 
 ## Data en back-ups
 
-- Projecten staan als JSON-bestanden in `bouwplannen/data/projects/`. De API-container schrijft als de eigenaar van die map (`BOUWPLANNEN_UID`/`GID` in `.env`, door `update.sh` ingevuld). Je kunt de map dus zelf lezen en meenemen in een back-up, bijvoorbeeld naar Nextcloud.
+- Projecten staan als JSON-bestanden in `bouwplannen/data/projects/`, gebruikers en groepen in `data/accounts.json`. De API-container schrijft als de eigenaar van die map (`BOUWPLANNEN_UID`/`GID` in `.env`, door `update.sh` ingevuld). Je kunt de map dus zelf lezen en meenemen in een back-up, bijvoorbeeld naar Nextcloud.
 - Terugzetten van een back-up:
 
   ```bash
@@ -88,7 +102,7 @@ Wat de config doet: HTTP → HTTPS, HTTP/2, HSTS, uploadlimiet van 6 MB en doors
 
 **Geen nginx op de server?** Dan kan de meegeleverde Caddy het doen: `COMPOSE_PROFILES=https` en `DOMAIN=…` in `.env`. Niet allebei gebruiken: ze willen allebei poort 80 en 443.
 
-Gebruik de app niet zonder HTTPS buiten je eigen netwerk: de API-sleutel gaat anders leesbaar mee.
+Gebruik de app niet zonder HTTPS buiten je eigen netwerk: wachtwoord en login-cookie gaan anders leesbaar mee.
 
 ## Handig
 
@@ -100,4 +114,4 @@ docker compose restart api        # API herstarten
 
 ## Tests
 
-`tests/run-tests.sh` test `update.sh` van begin tot eind, met lokale git-repo's en een nagebootste `docker` (geen Docker of netwerk nodig). Het doorloopt 28 controles, waaronder: eerste installatie, niets nieuw, nieuwe commit met back-up, een kapotte versie die wordt teruggedraaid en daarna overgeslagen, `--force`, een bouwfout, opruimen van back-ups, de lock, een bezette poort en het zelf bijwerken van deze repo.
+`tests/run-tests.sh` test `update.sh` van begin tot eind, met lokale git-repo's en een nagebootste `docker` (geen Docker of netwerk nodig). Het doorloopt 32 controles, waaronder: eerste installatie, niets nieuw, nieuwe commit met back-up, een kapotte versie die wordt teruggedraaid en daarna overgeslagen, `--force`, een bouwfout, opruimen van back-ups, de lock, een bezette poort, `user.sh` en het zelf bijwerken van deze repo.

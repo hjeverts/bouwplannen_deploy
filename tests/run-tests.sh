@@ -48,19 +48,21 @@ rc() { cat "$T/rc"; }
 out() { grep -q -- "$1" "$T/out.log"; }
 
 echo "1. zonder .env"
-run
-check "stopt met duidelijke melding" '[[ $(rc) == 1 ]] && out ".env ontbreekt"'
+# Repo-adressen komen normaal uit .env.example (GitHub); voor de test via de omgeving.
+(cd "$S" && FRONTEND_REPO="$T/frontend.git" BACKEND_REPO="$T/backend.git" ./update.sh --no-self-update) >"$T/out.log" 2>&1; echo $? >"$T/rc"
+check ".env aangemaakt uit het voorbeeld" '[[ -f $S/.env ]] && out ".env aangemaakt" && grep -q "^WEB_PORT=8380" "$S/.env"'
+rm -rf "$S/.env" "$P/bouwplannen_frontend" "$P/bouwplannen_backend" "$P/data" "$S/.deployed-version"
+rm -f "$T/state/images"
+
+echo "2. user.sh vóór de installatie"
+(cd "$S" && ./user.sh list) >"$T/out.log" 2>&1; echo $? >"$T/rc"
+check "vraagt eerst update.sh te draaien" '[[ $(rc) == 1 ]] && out "draai eerst ./update.sh"'
 
 cat >"$S/.env" <<EOF
-BOUWPLANNEN_API_KEY=
 FRONTEND_REPO=$T/frontend.git
 BACKEND_REPO=$T/backend.git
 BACKUP_KEEP=2
 EOF
-echo "2. lege sleutel"
-run
-check "weigert lege API-sleutel" '[[ $(rc) == 1 ]] && out "BOUWPLANNEN_API_KEY is leeg"'
-sed -i 's/^BOUWPLANNEN_API_KEY=$/BOUWPLANNEN_API_KEY=test/' "$S/.env"
 
 echo "3. eerste installatie"
 run
@@ -68,6 +70,7 @@ check "clonet, bouwt, gezond" '[[ $(rc) == 0 ]] && out "frontend: nieuw" && out 
 check "repo's naast de deploy-map" '[[ -d $P/bouwplannen_frontend/.git && -d $P/bouwplannen_backend/.git && $(ls $P | tr "\n" " ") == "bouwplannen_backend bouwplannen_deploy bouwplannen_frontend data " ]]'
 check "geen back-up zonder data" 'out "geen back-up nodig"'
 check "versie vastgelegd" '[[ -s $S/.deployed-version ]]'
+check "herinnert aan een eerste account" 'out "nog geen account"'
 check "datamap naast de repo's" '[[ -d $P/data ]]'
 check "eigenaar datamap in .env" 'grep -q "^BOUWPLANNEN_UID=$(id -u)$" "$S/.env" && grep -q "^BOUWPLANNEN_GID=$(id -g)$" "$S/.env"'
 
@@ -148,7 +151,16 @@ run --force
 check "geen melding als het onze eigen container is" '[[ $(rc) == 0 ]]'
 rm "$T/state/port-busy"
 
-echo "15. onbekende optie"
+echo "15. user.sh na de installatie"
+(cd "$S" && ./user.sh add hans --admin) >"$T/out.log" 2>&1; echo $? >"$T/rc"
+check "roept de API-container aan" '[[ $(rc) == 0 ]] && out "users-cli: compose run --rm --no-deps -T api users add hans --admin"'
+(cd "$S" && ./user.sh) >"$T/out.log" 2>&1; echo $? >"$T/rc"
+check "zonder opdracht: hulp en code 2" '[[ $(rc) == 2 ]] && out "./user.sh add"'
+mkdir -p "$P/data" && echo '{"users":[{}]}' >"$P/data/accounts.json"
+run
+check "geen herinnering als er accounts zijn" '[[ $(rc) == 0 ]] && ! out "nog geen account"'
+
+echo "16. onbekende optie"
 run --verkeerd
 check "geeft hulp en code 2" '[[ $(rc) == 2 ]] && out "Onbekende optie"'
 

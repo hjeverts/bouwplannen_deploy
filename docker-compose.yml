@@ -19,9 +19,11 @@ services:
     # update.sh vult BOUWPLANNEN_UID/GID in .env in.
     user: "${BOUWPLANNEN_UID:-1654}:${BOUWPLANNEN_GID:-1654}"
     environment:
-      Auth__ApiKey: ${BOUWPLANNEN_API_KEY:?Zet BOUWPLANNEN_API_KEY in .env}
       Storage__DataDirectory: /data
-      # De frontend roept de API aan via hetzelfde adres (nginx stuurt /api door), dus CORS is niet nodig.
+      # Inloggen gaat met accounts (./user.sh); de app roept de API aan via hetzelfde adres (nginx stuurt
+      # /api door), dus geen CORS en de login-cookie blijft binnen dit domein.
+      # BOUWPLANNEN_PASSWORD wordt alleen gebruikt door ./user.sh (wachtwoord zonder te typen).
+      BOUWPLANNEN_PASSWORD: ${BOUWPLANNEN_PASSWORD:-}
     volumes:
       - ${BOUWPLANNEN_DATA_DIR:-../data}:/data
     expose:

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Bouwplannen bijwerken: nieuwste code ophalen, images bouwen en de containers vernieuwen.
+# Bouwplannen installeren of bijwerken: nieuwste code ophalen, images bouwen en de containers vernieuwen.
 #
 #   ./update.sh               alleen bouwen als er nieuwe commits zijn
 #   ./update.sh --force       altijd opnieuw bouwen
@@ -60,13 +60,15 @@ docker compose version >/dev/null 2>&1 || die "'docker compose' (v2) ontbreekt."
 exec 9>"$DEPLOY_DIR/.update.lock"
 flock -n 9 || die "update.sh draait al."
 
-[[ -f .env ]] || die ".env ontbreekt. Kopieer .env.example naar .env en vul de API-sleutel in."
+if [[ ! -f .env ]]; then
+  cp .env.example .env
+  log ".env aangemaakt uit .env.example (pas WEB_PORT daar aan als 8380 al in gebruik is)."
+fi
 set -a
 # shellcheck disable=SC1091
 source ./.env
 set +a
 
-[[ -n "${BOUWPLANNEN_API_KEY:-}" ]] || die "BOUWPLANNEN_API_KEY is leeg in .env (maak er een met: openssl rand -hex 24)."
 if [[ ",${COMPOSE_PROFILES:-}," == *",https,"* && -z "${DOMAIN:-}" ]]; then
   die "COMPOSE_PROFILES bevat https, maar DOMAIN is leeg in .env."
 fi
@@ -175,6 +177,12 @@ check_port() {
   fi
 }
 
+remind_accounts() {
+  if [[ ! -s "$DATA_DIR/accounts.json" ]]; then
+    log "Er is nog geen account. Maak er een met: ./user.sh add <naam>   (het eerste account wordt beheerder)"
+  fi
+}
+
 images_present() {
   docker image inspect bouwplannen-web:latest bouwplannen-api:latest >/dev/null 2>&1
 }
@@ -203,6 +211,7 @@ if [[ $CHANGED -eq 0 && $FORCE -eq 0 ]]; then
   check_port
   docker compose up -d --remove-orphans >/dev/null
   log "Niets nieuws. Alles draait."
+  remind_accounts
   exit 0
 fi
 
@@ -263,6 +272,7 @@ if wait_healthy; then
   rm -f "$FAILED_FILE"
   docker image prune -f >/dev/null 2>&1 || true
   log "Klaar: frontend ${FRONT_NEW:0:7}, backend ${BACK_NEW:0:7}."
+  remind_accounts
   exit 0
 fi
 

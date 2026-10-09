@@ -100,4 +100,4 @@ if [[ "${NO_RELOAD:-0}" != "1" ]]; then
 fi
 
 echo "Klaar: https://$DOMAIN stuurt door naar 127.0.0.1:$PORT."
-echo "Vul in de app bij Synchroniseren https://$DOMAIN in, met de API-sleutel uit .env."
+echo "Open https://$DOMAIN en log in met een account (aanmaken met: ./user.sh add <naam>)."
