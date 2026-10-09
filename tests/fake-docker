@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Nep-docker voor de tests: legt aanroepen vast en speelt images, data en gezondheid na.
+# Een versie is "kapot" als ../bouwplannen_backend een bestand BROKEN bevat.
+STATE="${FAKE_DOCKER_STATE:?}"
+echo "docker $*" >>"$STATE/calls.log"
+case "$1 $2" in
+  "compose version") echo "Docker Compose version v2-fake"; exit 0 ;;
+  "image inspect") [[ -f "$STATE/images" ]]; exit $? ;;
+  "image prune") exit 0 ;;
+  "compose build")
+    [[ -f "$STATE/fail-build" ]] && { echo "build failed" >&2; exit 1; }
+    touch "$STATE/images"
+    git -C ../bouwplannen_backend rev-parse HEAD >"$STATE/built-backend"
+    exit 0 ;;
+  "compose up") mkdir -p ../data/projects && echo '{}' >../data/projects/p1.json; exit 0 ;;
+  "compose ps") echo "cid123"; exit 0 ;;
+  "compose logs") echo "api | fake log line"; exit 0 ;;
+  "inspect -f")
+    if [[ -f ../bouwplannen_backend/BROKEN ]]; then echo unhealthy; else echo healthy; fi
+    exit 0 ;;
+  "run --rm")
+    # docker run --rm -v VOL:/data:ro -v HOSTDIR:/backup alpine tar czf /backup/NAME -C /data .
+    host=""; name=""
+    for a in "$@"; do
+      case "$a" in *:/backup) host="${a%:/backup}" ;; /backup/*) name="${a#/backup/}" ;; esac
+    done
+    echo "data" >"$host/$name"
+    exit 0 ;;
+esac
+echo "fake docker: unhandled: $*" >&2
+exit 0

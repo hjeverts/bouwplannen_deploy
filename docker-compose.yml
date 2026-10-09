@@ -1,0 +1,71 @@
+# Bouwplannen: frontend (nginx) en API (.NET) samen.
+# De broncode staat naast deze map:
+#   bouwplannen/
+#   ├── bouwplannen_deploy/     (deze repo, hier draai je update.sh)
+#   ├── bouwplannen_frontend/
+#   ├── bouwplannen_backend/
+#   └── data/                   (projecten als JSON-bestanden)
+# update.sh haalt die repo's op en houdt ze bij. Instellingen in .env (zie .env.example).
+
+name: bouwplannen
+
+services:
+  api:
+    build:
+      context: ../bouwplannen_backend
+    image: bouwplannen-api:latest
+    restart: unless-stopped
+    # Schrijf als de eigenaar van de datamap, zodat je de bestanden zelf kunt lezen en back-uppen.
+    # update.sh vult BOUWPLANNEN_UID/GID in .env in.
+    user: "${BOUWPLANNEN_UID:-1654}:${BOUWPLANNEN_GID:-1654}"
+    environment:
+      Auth__ApiKey: ${BOUWPLANNEN_API_KEY:?Zet BOUWPLANNEN_API_KEY in .env}
+      Storage__DataDirectory: /data
+      # De frontend roept de API aan via hetzelfde adres (nginx stuurt /api door), dus CORS is niet nodig.
+    volumes:
+      - ${BOUWPLANNEN_DATA_DIR:-../data}:/data
+    expose:
+      - "8080"
+
+  web:
+    build:
+      # De nginx-instellingen staan in deze repo; de app zelf komt uit ../bouwplannen_frontend.
+      context: ./frontend
+      additional_contexts:
+        app: ../bouwplannen_frontend
+    image: bouwplannen-web:latest
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8080}:80"
+    healthcheck:
+      # Controleert nginx én de API erachter.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # Optioneel: HTTPS met een automatisch Let's Encrypt-certificaat.
+  # Aanzetten met COMPOSE_PROFILES=https en DOMAIN=... in .env. Niet nodig als je al een reverse proxy hebt.
+  caddy:
+    image: caddy:2
+    profiles: ["https"]
+    restart: unless-stopped
+    depends_on:
+      - web
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:-}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  caddy-data:
+  caddy-config:

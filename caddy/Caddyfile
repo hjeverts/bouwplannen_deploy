@@ -1,0 +1,6 @@
+# Alleen gebruikt met COMPOSE_PROFILES=https. Caddy haalt zelf een certificaat op voor $DOMAIN
+# (poort 80 en 443 moeten vanaf internet naar deze server wijzen).
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy web:80
+}

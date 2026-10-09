@@ -1,0 +1,9 @@
+# Instellingen met de API-sleutel
+.env
+
+# Back-ups van de projectdata en lock
+backups/
+.update.lock
+.deployed-version
+.failed-version
+update.log
