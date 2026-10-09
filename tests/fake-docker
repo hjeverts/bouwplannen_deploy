@@ -13,7 +13,7 @@ case "$1 $2" in
     git -C ../bouwplannen_backend rev-parse HEAD >"$STATE/built-backend"
     exit 0 ;;
   "compose up") mkdir -p ../data/projects && echo '{}' >../data/projects/p1.json; exit 0 ;;
-  "compose ps") echo "cid123"; exit 0 ;;
+  "compose ps") [[ -f "$STATE/not-running" ]] || echo "cid123"; exit 0 ;;
   "compose logs") echo "api | fake log line"; exit 0 ;;
   "inspect -f")
     if [[ -f ../bouwplannen_backend/BROKEN ]]; then echo unhealthy; else echo healthy; fi

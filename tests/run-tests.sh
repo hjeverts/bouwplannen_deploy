@@ -133,7 +133,22 @@ git -C "$T/work-deploy" commit -qam "script bijgewerkt" && git -C "$T/work-deplo
 run
 check "haalt nieuw script op en herstart" '[[ $(rc) == 0 ]] && out "Deploy-repo bijgewerkt" && grep -q "zelf-update-test" "$S/update.sh"'
 
-echo "14. onbekende optie"
+echo "14. poort al bezet door iets anders"
+cat >"$T/bin/ss" <<'EOS'
+#!/usr/bin/env bash
+[[ -f "$FAKE_DOCKER_STATE/port-busy" ]] && echo "LISTEN 0 511 127.0.0.1:8380 0.0.0.0:*"
+exit 0
+EOS
+chmod +x "$T/bin/ss"
+touch "$T/state/not-running" "$T/state/port-busy"
+run --force
+check "stopt met duidelijke melding" '[[ $(rc) == 1 ]] && out "Poort 8380 is al in gebruik"'
+rm "$T/state/not-running"
+run --force
+check "geen melding als het onze eigen container is" '[[ $(rc) == 0 ]]'
+rm "$T/state/port-busy"
+
+echo "15. onbekende optie"
 run --verkeerd
 check "geeft hulp en code 2" '[[ $(rc) == 2 ]] && out "Onbekende optie"'
 

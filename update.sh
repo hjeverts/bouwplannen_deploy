@@ -165,6 +165,16 @@ describe() {
 describe "frontend" "$FRONT_OLD" "$FRONT_NEW" "$FRONTEND_DIR"
 describe "backend " "$BACK_OLD" "$BACK_NEW" "$BACKEND_DIR"
 
+# Is de webpoort vrij (of al van onze eigen container)? Voorkomt een vage Docker-fout bij een botsing.
+check_port() {
+  local port="${WEB_PORT:-8380}"
+  command -v ss >/dev/null 2>&1 || return 0
+  [[ -n "$(docker compose ps -q web 2>/dev/null)" ]] && return 0
+  if [[ -n "$(ss -Hltn "sport = :$port" 2>/dev/null)" ]]; then
+    die "Poort $port is al in gebruik door een ander programma of een andere container. Kies een vrije WEB_PORT in .env (bekijk bezette poorten met: ss -ltn) en pas de poort ook aan in je nginx-config."
+  fi
+}
+
 images_present() {
   docker image inspect bouwplannen-web:latest bouwplannen-api:latest >/dev/null 2>&1
 }
@@ -190,6 +200,7 @@ fi
 
 if [[ $CHANGED -eq 0 && $FORCE -eq 0 ]]; then
   # Geen nieuwe code; wel zorgen dat alles draait met de huidige instellingen (no-op als dat al zo is).
+  check_port
   docker compose up -d --remove-orphans >/dev/null
   log "Niets nieuws. Alles draait."
   exit 0
@@ -234,6 +245,7 @@ build_and_start() {
   docker compose build --pull && docker compose up -d --remove-orphans
 }
 
+check_port
 if [[ $BACKUP -eq 1 ]]; then backup_data; fi
 
 log "Images bouwen…"

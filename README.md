@@ -6,7 +6,7 @@ Draait de [frontend](https://github.com/hjeverts/bouwplannen_frontend) en de [AP
 
 ```
 bouwplannen/
-├── bouwplannen_deploy/     ← deze repo; hier draai je ./update.sh
+├── bouwplannen_deploy/     ← deze repo; hier draai je ./update.sh (en host-nginx/install.sh)
 ├── bouwplannen_frontend/   ← opgehaald en bijgehouden door update.sh
 ├── bouwplannen_backend/    ← idem
 └── data/projects/*.json    ← de projecten
@@ -27,7 +27,7 @@ sed -i "s/^BOUWPLANNEN_API_KEY=.*/BOUWPLANNEN_API_KEY=$(openssl rand -hex 24)/" 
 ./update.sh
 ```
 
-De eerste run clonet de frontend en backend naast deze map, maakt `../data` aan, bouwt de images en start alles. Daarna staat de app op `http://127.0.0.1:8080` (zie `WEB_BIND` / `WEB_PORT` in `.env`).
+De eerste run clonet de frontend en backend naast deze map, maakt `../data` aan, bouwt de images en start alles. Daarna staat de app op `http://127.0.0.1:8380`. Die poort pas je aan met `WEB_PORT` in `.env` (niet in `docker-compose.yml`: dat bestand komt uit git en `update.sh` werkt het bij). Is de poort al bezet, dan stopt `update.sh` met een duidelijke melding.
 
 De API-sleutel voor de app vind je terug met `grep BOUWPLANNEN_API_KEY .env`.
 
@@ -66,10 +66,27 @@ Er draait altijd maar één `update.sh` tegelijk (lock), dus automatisch draaien
   docker compose start api
   ```
 
-## HTTPS
+## HTTPS met nginx op de server
 
-- **Heb je al een reverse proxy** (nginx, Traefik, Caddy, Nginx Proxy Manager): laat `WEB_BIND=127.0.0.1` staan en stuur je domein door naar `http://127.0.0.1:8080`.
-- **Geen reverse proxy:** zet in `.env` `COMPOSE_PROFILES=https` en `DOMAIN=bouwplannen.jouwdomein.nl`. Poort 80 en 443 moeten naar de server wijzen. Caddy haalt dan zelf een Let's Encrypt-certificaat op.
+`host-nginx/` bevat een voorbeeldconfig (`bouwplannen.conf.template`) en een script dat hem installeert:
+
+```bash
+sudo apt install certbot python3-certbot-nginx   # als certbot er nog niet is
+sudo host-nginx/install.sh bouwplannen.streve.nl
+```
+
+Het script:
+
+1. leest `WEB_PORT` uit `.env` en vult domein en poort in de config in;
+2. vraagt met certbot een Let's Encrypt-certificaat aan als dat er nog niet is (de DNS van het domein en poort 80 moeten naar de server wijzen; certbot verlengt daarna zelf);
+3. zet de config in `/etc/nginx/sites-available/bouwplannen.conf` met een link in `sites-enabled/`;
+4. test met `nginx -t` en herlaadt nginx alleen als dat slaagt. Faalt de test, dan zet het de vorige situatie terug.
+
+Wat de config doet: HTTP → HTTPS, HTTP/2, HSTS, uploadlimiet van 6 MB en doorsturen naar `127.0.0.1:<WEB_PORT>`. Wil je hem eerst bekijken: `host-nginx/install.sh bouwplannen.streve.nl --print`. Regel je het certificaat zelf, gebruik dan `--no-certbot`.
+
+**Poort wijzigen?** Pas `WEB_PORT` aan in `.env`, draai `./update.sh` en daarna opnieuw `sudo host-nginx/install.sh <domein>`.
+
+**Geen nginx op de server?** Dan kan de meegeleverde Caddy het doen: `COMPOSE_PROFILES=https` en `DOMAIN=…` in `.env`. Niet allebei gebruiken: ze willen allebei poort 80 en 443.
 
 Gebruik de app niet zonder HTTPS buiten je eigen netwerk: de API-sleutel gaat anders leesbaar mee.
 
@@ -83,4 +100,4 @@ docker compose restart api        # API herstarten
 
 ## Tests
 
-`tests/run-tests.sh` test `update.sh` van begin tot eind, met lokale git-repo's en een nagebootste `docker` (geen Docker of netwerk nodig). Het doorloopt 26 controles, waaronder: eerste installatie, niets nieuw, nieuwe commit met back-up, een kapotte versie die wordt teruggedraaid en daarna overgeslagen, `--force`, een bouwfout, opruimen van back-ups, de lock en het zelf bijwerken van deze repo.
+`tests/run-tests.sh` test `update.sh` van begin tot eind, met lokale git-repo's en een nagebootste `docker` (geen Docker of netwerk nodig). Het doorloopt 28 controles, waaronder: eerste installatie, niets nieuw, nieuwe commit met back-up, een kapotte versie die wordt teruggedraaid en daarna overgeslagen, `--force`, een bouwfout, opruimen van back-ups, de lock, een bezette poort en het zelf bijwerken van deze repo.

@@ -38,7 +38,10 @@ services:
     depends_on:
       - api
     ports:
-      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8080}:80"
+      # Poort en adres op de server stel je in via .env (WEB_PORT, WEB_BIND), niet hier:
+      # dit bestand komt uit git en wordt door update.sh bijgewerkt. Kies een vrije poort,
+      # zodat Bouwplannen niet botst met andere containers. De API heeft geen eigen poort op de host.
+      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8380}:80"
     healthcheck:
       # Controleert nginx én de API erachter.
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/api/health"]
